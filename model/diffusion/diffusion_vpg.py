@@ -167,22 +167,27 @@ class VPGDiffusion(DiffusionModel):
         if self.predict_epsilon:
             if self.use_ddim:
                 """
-                x₀ = (xₜ - √ (1-αₜ) ε )/ √ αₜ
+                x0 = (xt - sqrt(1-alpha_t) eps ) / sqrt(alpha_t)
                 """
-                alpha = extract(self.ddim_alphas, index, x.shape)
+                # ---> FIX: Create a safe index to prevent CUDA out-of-bounds for inactive batch items
+                safe_index = torch.clamp(index, max=self.ddim_steps - 1)
+                alpha = extract(self.ddim_alphas, safe_index, x.shape)
+                
                 if k_b is not None:
-                    next_index = torch.clamp(index + k_b.long(), max=self.ddim_steps)
-                    alpha_prev = extract(self.ddim_alphas, next_index, x.shape)
+                    next_index = index + k_b.long()
+                    # ---> FIX: Clamp the next_index before extraction
+                    safe_next_index = torch.clamp(next_index, max=self.ddim_steps - 1)
+                    alpha_prev = extract(self.ddim_alphas, safe_next_index, x.shape)
+                    
                     # 處理終點：如果跳到底，alpha_prev 應該要是 1.0 (完全無雜訊)
                     is_done = (next_index >= self.ddim_steps).view(-1, 1, 1)
                     alpha_prev = torch.where(is_done, torch.ones_like(alpha_prev), alpha_prev)
                 else:
-                    alpha_prev = extract(self.ddim_alphas_prev, index, x.shape)
+                    alpha_prev = extract(self.ddim_alphas_prev, safe_index, x.shape)
 
                 sqrt_one_minus_alpha = extract(
-                    self.ddim_sqrt_one_minus_alphas, index, x.shape
+                    self.ddim_sqrt_one_minus_alphas, safe_index, x.shape
                 )
-                x_recon = (x - sqrt_one_minus_alpha * noise) / (alpha**0.5)
             else:
                 """
                 x₀ = √ 1\α̅ₜ xₜ - √ 1\α̅ₜ-1 ε
