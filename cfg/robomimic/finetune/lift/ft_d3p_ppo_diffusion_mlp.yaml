@@ -110,6 +110,7 @@ model:
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   denoising_steps: ${denoising_steps}
+  ddim_steps: ${denoising_steps}
   device: ${device}
 
 d3p:
