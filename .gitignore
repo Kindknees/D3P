@@ -3,7 +3,6 @@ result/
 wandb/
 .vscode/
 data/
-log/
 logs/
 checkpoints/
 .github/
