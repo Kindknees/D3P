@@ -167,7 +167,7 @@ class VPGDiffusion(DiffusionModel):
         if self.predict_epsilon:
             if self.use_ddim:
                 """
-                x0 = (xt - sqrt(1-alpha_t) eps ) / sqrt(alpha_t)
+                x₀ = (xₜ - √ (1-αₜ) ε )/ √ αₜ
                 """
                 # ---> FIX: Create a safe index to prevent CUDA out-of-bounds for inactive batch items
                 safe_index = torch.clamp(index, max=self.ddim_steps - 1)
@@ -188,6 +188,10 @@ class VPGDiffusion(DiffusionModel):
                 sqrt_one_minus_alpha = extract(
                     self.ddim_sqrt_one_minus_alphas, safe_index, x.shape
                 )
+                
+                # ---> THIS IS THE LINE I ACCIDENTALLY DELETED LAST TIME! <---
+                x_recon = (x - sqrt_one_minus_alpha * noise) / (alpha**0.5)
+                
             else:
                 """
                 x₀ = √ 1\α̅ₜ xₜ - √ 1\α̅ₜ-1 ε
@@ -198,6 +202,7 @@ class VPGDiffusion(DiffusionModel):
                 )
         else:  # directly predicting x₀
             x_recon = noise
+
         if self.denoised_clip_value is not None:
             x_recon.clamp_(-self.denoised_clip_value, self.denoised_clip_value)
             if self.use_ddim:
