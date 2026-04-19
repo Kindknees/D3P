@@ -66,6 +66,8 @@ class PPODiffusion(VPGDiffusion):
         oldlogprobs,
         use_bc_loss=False,
         reward_horizon=4,
+        indices_b=None, # ADDED
+        k_b=None        # ADDED
     ):
         """
         PPO loss
@@ -88,6 +90,8 @@ class PPODiffusion(VPGDiffusion):
             chains_next,
             denoising_inds,
             get_ent=True,
+            indices_b=indices_b, # ADDED
+            k_b=k_b              # ADDED
         )
         entropy_loss = -eta.mean()
         newlogprobs = newlogprobs.clamp(min=-5, max=2)

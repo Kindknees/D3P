@@ -142,6 +142,7 @@ class VPGDiffusion(DiffusionModel):
         t,
         cond,
         index=None,
+        k_b=None,
         use_base_policy=False,
         deterministic=False,
     ):
@@ -169,7 +170,15 @@ class VPGDiffusion(DiffusionModel):
                 x₀ = (xₜ - √ (1-αₜ) ε )/ √ αₜ
                 """
                 alpha = extract(self.ddim_alphas, index, x.shape)
-                alpha_prev = extract(self.ddim_alphas_prev, index, x.shape)
+                if k_b is not None:
+                    next_index = torch.clamp(index + k_b.long(), max=self.ddim_steps)
+                    alpha_prev = extract(self.ddim_alphas, next_index, x.shape)
+                    # 處理終點：如果跳到底，alpha_prev 應該要是 1.0 (完全無雜訊)
+                    is_done = (next_index >= self.ddim_steps).view(-1, 1, 1)
+                    alpha_prev = torch.where(is_done, torch.ones_like(alpha_prev), alpha_prev)
+                else:
+                    alpha_prev = extract(self.ddim_alphas_prev, index, x.shape)
+
                 sqrt_one_minus_alpha = extract(
                     self.ddim_sqrt_one_minus_alphas, index, x.shape
                 )
@@ -313,6 +322,92 @@ class VPGDiffusion(DiffusionModel):
         if return_chain:
             chain = torch.stack(chain, dim=1)
         return Sample(x, chain)
+    
+    def forward_d3p(self, cond, adaptor, deterministic=False, return_chain=True):
+        assert self.use_ddim, "D3P dynamic stepping currently requires DDIM schedule."
+        
+        device = self.device
+        B = cond["state"].shape[0]
+        max_ft_steps = self.ft_denoising_steps
+        max_ddim_steps = self.ddim_steps
+        
+        x = torch.randn((B, self.horizon_steps, self.action_dim), device=device)
+        
+        padded_chain = torch.zeros((B, max_ft_steps + 1, self.horizon_steps, self.action_dim), device=device)
+        padded_chain[:, 0] = x
+        padded_ks = torch.zeros((B, max_ft_steps), device=device)
+        padded_k_logprobs = torch.zeros((B, max_ft_steps), device=device)
+        padded_indices = torch.zeros((B, max_ft_steps), dtype=torch.long, device=device) # 👉 新增
+        valid_mask = torch.zeros((B, max_ft_steps), device=device)
+        
+        current_indices = torch.zeros(B, dtype=torch.long, device=device)
+        done = torch.zeros(B, dtype=torch.bool, device=device)
+        step_count = torch.zeros(B, dtype=torch.long, device=device)
+
+        while not done.all():
+            active = ~done
+            
+            # --- 1. Adaptor 預測跳躍步長 k ---
+            dist = adaptor(cond, x)
+            k_sample = dist.mean if deterministic else dist.sample()
+            
+            k_logprob = dist.log_prob(k_sample)
+            if k_logprob.dim() > 1:
+                k_logprob = k_logprob.sum(dim=-1)
+            
+            k_int = torch.floor(k_sample).long().clamp(min=1)
+            next_indices = torch.clamp(current_indices + k_int, max=max_ddim_steps)
+            
+            # --- 2. 呼叫 Base Policy 計算 DDIM ---
+            t_b = torch.zeros(B, dtype=torch.long, device=device)
+            t_b[active] = self.ddim_t[current_indices[active]]
+            
+            # 👉 直接依賴 p_mean_var 處理所有複雜數學
+            mean, logvar, _ = self.p_mean_var(
+                x=x,
+                t=t_b,
+                cond=cond,
+                index=current_indices,
+                k_b=k_int, # 動態步長
+                use_base_policy=False,
+                deterministic=deterministic,
+            )
+            std = torch.exp(0.5 * logvar)
+            
+            if deterministic:
+                std = torch.zeros_like(std)
+            else:
+                std = torch.clip(std, min=self.get_min_sampling_denoising_std())
+                
+            noise_sample = torch.randn_like(x).clamp_(-self.randn_clip_value, self.randn_clip_value)
+            x_next = mean + std * noise_sample
+            
+            # --- 3. 填入對齊 Buffer ---
+            valid_update = active & (step_count < max_ft_steps)
+            
+            if valid_update.any():
+                b_idx = torch.where(valid_update)[0]
+                s_idx = step_count[valid_update]
+                
+                padded_chain[b_idx, s_idx + 1] = x_next[b_idx]
+                
+                k_vals = k_sample[b_idx]
+                padded_ks[b_idx, s_idx] = k_vals.squeeze() if k_vals.dim() > 1 else k_vals
+                padded_k_logprobs[b_idx, s_idx] = k_logprob[b_idx]
+                padded_indices[b_idx, s_idx] = current_indices[b_idx] # 👉 紀錄當下 t index
+                valid_mask[b_idx, s_idx] = 1.0
+            
+            x = torch.where(active.view(B, 1, 1), x_next, x)
+            current_indices = torch.where(active, next_indices, current_indices)
+            
+            step_count[active] += 1
+            done = (current_indices >= max_ddim_steps) | (step_count >= max_ft_steps)
+
+        if self.final_action_clip_value is not None:
+            x = torch.clamp(x, -self.final_action_clip_value, self.final_action_clip_value)
+
+        # 回傳 padded_indices 供後續 Loss 計算
+        return Sample(x, padded_chain), padded_ks, padded_k_logprobs, padded_indices, valid_mask, step_count.float()
 
     # ---------- RL training ----------#
 
@@ -403,6 +498,8 @@ class VPGDiffusion(DiffusionModel):
         denoising_inds,
         get_ent: bool = False,
         use_base_policy: bool = False,
+        indices_b=None,       # 從 denoising_inds 改為真實的 indices_b
+        k_b=None,             # 新增 k_b
     ):
         """
         Calculating the logprobs of random samples of denoised chains.
@@ -420,27 +517,31 @@ class VPGDiffusion(DiffusionModel):
             entropy (if get_ent=True):  (B, Ta)
             denoising_indices: (B, )
         """
-        # Sample t for batch dim, keep it 1-dim
-        if self.use_ddim:
-            t_single = self.ddim_t[-self.ft_denoising_steps :]
+        if indices_b is not None:
+            t_all = self.ddim_t[indices_b]
+            ddim_indices = indices_b
         else:
-            t_single = torch.arange(
-                start=self.ft_denoising_steps - 1,
-                end=-1,
-                step=-1,
-                device=self.device,
-            )
-            # 4,3,2,1,0,4,3,2,1,0,...,4,3,2,1,0
-        t_all = t_single[denoising_inds]
-        if self.use_ddim:
-            ddim_indices_single = torch.arange(
-                start=self.ddim_steps - self.ft_denoising_steps,
-                end=self.ddim_steps,
-                device=self.device,
-            )  # only used for DDIM
-            ddim_indices = ddim_indices_single[denoising_inds]
-        else:
-            ddim_indices = None
+            # Sample t for batch dim, keep it 1-dim
+            if self.use_ddim:
+                t_single = self.ddim_t[-self.ft_denoising_steps :]
+            else:
+                t_single = torch.arange(
+                    start=self.ft_denoising_steps - 1,
+                    end=-1,
+                    step=-1,
+                    device=self.device,
+                )
+                # 4,3,2,1,0,4,3,2,1,0,...,4,3,2,1,0
+            t_all = t_single[denoising_inds]
+            if self.use_ddim:
+                ddim_indices_single = torch.arange(
+                    start=self.ddim_steps - self.ft_denoising_steps,
+                    end=self.ddim_steps,
+                    device=self.device,
+                )  # only used for DDIM
+                ddim_indices = ddim_indices_single[denoising_inds]
+            else:
+                ddim_indices = None
 
         # Forward pass with previous chains
         next_mean, logvar, eta = self.p_mean_var(
@@ -448,6 +549,7 @@ class VPGDiffusion(DiffusionModel):
             t_all,
             cond=cond,
             index=ddim_indices,
+            k_b=k_b,
             use_base_policy=use_base_policy,
         )
         std = torch.exp(0.5 * logvar)
@@ -459,6 +561,7 @@ class VPGDiffusion(DiffusionModel):
         if get_ent:
             return log_prob, eta
         return log_prob
+
 
     def loss(self, cond, chains, reward):
         """
