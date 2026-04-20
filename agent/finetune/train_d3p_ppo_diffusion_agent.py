@@ -577,3 +577,22 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                 with open(self.result_path, "wb") as f:
                     pickle.dump(run_results, f)
             self.itr += 1
+
+    def save_model(self):
+        """
+        Overrides the parent save_model to also save the D3P adaptor.
+        """
+        # Let the parent class save the main diffusion model (e.g., state_0.pt)
+        super().save_model()
+        
+        # Define the path for the adaptor
+        adaptor_path = os.path.join(self.checkpoint_dir, f"adaptor_{self.itr}.pt")
+        
+        # Save the adaptor's weights and its optimizer state
+        payload = {
+            "adaptor": self.adaptor.state_dict(),
+            "adaptor_optimizer": self.adaptor_optimizer.state_dict(),
+        }
+        
+        torch.save(payload, adaptor_path)
+        log.info(f"Saved D3P Adaptor to {adaptor_path}")
