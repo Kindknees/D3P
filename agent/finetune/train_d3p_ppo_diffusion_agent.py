@@ -53,8 +53,8 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
         self.adaptor = D3PAdaptor(
             obs_dim=cfg.obs_dim,
             action_dim=cfg.action_dim,
-            output_mean=cfg.denoising_steps,
-            seq_len=stride,
+            output_mean=stride,
+            seq_len=cfg.cond_steps,
             chunk_size=self.horizon_steps,
             mlp_dims=adaptor_mlp_dims  # 將陣列傳進去
         ).to(self.device)
