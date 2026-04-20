@@ -251,7 +251,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                     k_k_floor = torch.floor(torch.tensor(k_trajs, device=self.device).float()).long().clamp(min=1).view(-1, self.model.ft_denoising_steps)
                     valid_mask_flat = torch.tensor(valid_mask_trajs, device=self.device).float().view(-1)
                     chains_k = torch.tensor(chains_trajs, device=self.device).float().view(-1, self.model.ft_denoising_steps + 1, self.horizon_steps, self.action_dim)
-                    obs_state_k = torch.from_numpy(obs_trajs["state"]).float().to(self.device).view(-1, *obs_trajs["state"].shape[2:])
+                    obs_state_k = obs_trajs["state"].view(-1, *obs_trajs["state"].shape[2:])
 
                     valid_inds = torch.where(valid_mask_flat > 0)[0]
                     logprobs_k_flat = torch.zeros((len(valid_mask_flat), self.horizon_steps, self.action_dim), device=self.device)
