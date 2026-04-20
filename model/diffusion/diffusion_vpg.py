@@ -221,7 +221,10 @@ class VPGDiffusion(DiffusionModel):
             if deterministic:
                 etas = torch.zeros((x.shape[0], 1, 1)).to(x.device)
             else:
-                etas = self.eta(cond).unsqueeze(1)  # B x 1 x (Da or 1)
+                if hasattr(self, 'eta') and self.eta is not None:
+                    etas = self.eta(cond).unsqueeze(1)  # B x 1 x (Da or 1)
+                else:
+                    etas = torch.ones((x.shape[0], 1, 1), device=x.device)
             sigma = (
                 etas
                 * ((1 - alpha_prev) / (1 - alpha) * (1 - alpha / alpha_prev)) ** 0.5
