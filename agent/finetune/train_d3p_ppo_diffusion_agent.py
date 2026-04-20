@@ -342,6 +342,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                 total_env_steps = self.n_steps * self.n_envs
 
                 # Update D3P adaptor
+                adaptor_losses = [] # record adaptor loss for wandb logging
                 for update_epoch in range(self.update_epochs):
                     inds_adaptor = torch.randperm(total_env_steps, device=self.device)
                     num_adaptor_batch = max(1, total_env_steps // self.batch_size)
@@ -385,6 +386,8 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         # 因為後面不會再用到這張計算圖了，這裡不需要 retain_graph=True
                         adaptor_loss.backward()
                         self.adaptor_optimizer.step()
+
+                        adaptor_losses.append(adaptor_loss.item())
 
                 # Update policy and critic
                 total_denoise_steps = self.n_steps * self.n_envs * self.model.ft_denoising_steps
@@ -563,9 +566,9 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                                 "num episode - train": num_episode_finished,
                                 "diffusion - min sampling std": diffusion_min_sampling_std,
                                 "actor lr": self.actor_optimizer.param_groups[0]["lr"],
-                                "critic lr": self.critic_optimizer.param_groups[0][
-                                    "lr"
-                                ],
+                                "critic lr": self.critic_optimizer.param_groups[0]["lr"],
+                                "adaptor loss": np.mean(adaptor_losses) if len(adaptor_losses) > 0 else 0.0,
+                                "avg denoising steps": stp_k.mean().item() if 'stp_k' in locals() else self.model.ft_denoising_steps,
                             },
                             step=self.itr,
                             commit=True,
