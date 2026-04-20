@@ -48,12 +48,13 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
         # intialize d3p adaptor
         # 讀取 yaml 中的 mlp_dims，如果沒讀到就給一個預設值
         adaptor_mlp_dims = cfg.get("d3p", {}).get("mlp_dims", [256, 512, 1024, 512, 256])
+        stride = cfg.denoising_steps // cfg.ft_denoising_steps
         
         self.adaptor = D3PAdaptor(
             obs_dim=cfg.obs_dim,
             action_dim=cfg.action_dim,
-            output_mean=cfg.ft_denoising_steps,
-            seq_len=cfg.cond_steps,
+            output_mean=cfg.denoising_steps,
+            seq_len=stride,
             chunk_size=self.horizon_steps,
             mlp_dims=adaptor_mlp_dims  # 將陣列傳進去
         ).to(self.device)
@@ -420,6 +421,9 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         indices_b = indices_k[batch_inds_b, denoising_inds_b]
                         k_b = k_k_floor[batch_inds_b, denoising_inds_b]
 
+                        # Extract the total steps for the items in this batch
+                        stp_b = stp_k[batch_inds_b]
+
                         # get diffusion policy loss
                         (
                             pg_loss,
@@ -442,7 +446,8 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                             use_bc_loss=self.use_bc_loss,
                             reward_horizon=self.reward_horizon,
                             indices_b=indices_b,
-                            k_b=k_b
+                            k_b=k_b,
+                            stp_b=stp_b
                         )
                         loss = (
                             pg_loss
