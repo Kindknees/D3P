@@ -69,6 +69,9 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
         self.alpha_w = cfg.get("d3p", {}).get("alpha", 1.0)
         self.beta_w = cfg.get("d3p", {}).get("beta", 0.2)
 
+        self.e_slow = max(1, cfg.train.update_epochs // 2)
+        self._in_stage3 = False
+
 
 
     def run(self):
@@ -119,6 +122,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                 obs_full_trajs = np.vstack(
                     (obs_full_trajs, prev_obs_venv["state"][:, -1][None])
                 )
+            indices_trajs = np.zeros((self.n_steps, self.n_envs, _D), dtype=np.int64)
 
             # Collect a set of trajectories from env
             for step in range(self.n_steps):
@@ -133,7 +137,6 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         .to(self.device)
                     }
 
-                    indices_trajs = np.zeros((self.n_steps, self.n_envs, _D), dtype=np.int64)
                     samples, k_samples, k_logprobs, padded_indices, v_mask, stp_t = self.model.forward_d3p(
                         cond=cond,
                         adaptor=self.adaptor,
@@ -252,7 +255,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                     indices_k = torch.tensor(indices_trajs, device=self.device).long().view(-1, _D)
                     k_k_floor = torch.floor(torch.tensor(k_trajs, device=self.device).float()).long().clamp(min=1).view(-1, _D)
                     valid_mask_flat = torch.tensor(valid_mask_trajs, device=self.device).float().view(-1)
-                    chains_k = torch.tensor(chains_trajs, device=self.device).float().view(-1, self.model.ft_denoising_steps + 1, self.horizon_steps, self.action_dim)
+                    chains_k = torch.tensor(chains_trajs, device=self.device).float().view(-1, _D + 1, self.horizon_steps, self.action_dim)
                     obs_state_k = obs_trajs["state"].view(-1, *obs_trajs["state"].shape[2:])
 
                     valid_inds = torch.where(valid_mask_flat > 0)[0]
@@ -278,9 +281,8 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         )
                         logprobs_k_flat[batch_idx] = logp
 
-                    logprobs_k = logprobs_k_flat.view(-1, self.model.ft_denoising_steps, self.horizon_steps, self.action_dim)
-
-                    logprobs_trajs = logprobs_k_flat.view(-1, self.model.ft_denoising_steps, self.horizon_steps, self.action_dim).cpu().numpy()
+                    logprobs_k     = logprobs_k_flat.view(-1, _D, self.horizon_steps, self.action_dim)
+                    logprobs_trajs = logprobs_k.cpu().numpy()
 
                     # normalize reward with running variance if specified
                     if self.reward_scale_running:
@@ -337,62 +339,65 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                 advantages_k = torch.tensor(advantages_trajs, device=self.device).float().reshape(-1)
                 logprobs_k = torch.tensor(logprobs_trajs, device=self.device).float()
 
-                indices_k = torch.tensor(indices_trajs, device=self.device).long().view(-1, self.model.ft_denoising_steps)
-                k_k_floor = torch.floor(torch.tensor(k_trajs, device=self.device).float()).long().clamp(min=1).view(-1, self.model.ft_denoising_steps)
+                indices_k  = torch.tensor(indices_trajs, device=self.device).long().view(-1, _D)
+                k_k_floor  = torch.floor(torch.tensor(k_trajs, device=self.device).float()).long().clamp(min=1).view(-1, _D)
 
                 # Update
                 total_env_steps = self.n_steps * self.n_envs
 
-                # Update D3P adaptor
-                adaptor_losses = [] # record adaptor loss for wandb logging
+                # ---- D3P Adaptor Update (paper Eq. 7 + Eq. 8) ----
+                # r_K is the terminal reward at j=0; it already contains the γ_s^(sgn·stp)
+                # and γ_s^stp penalty factors from Eq. 7.
+                sgn_adv = torch.sign(env_advantages_k)
+                term1 = self.alpha_w * env_advantages_k * (self.gamma_s ** (sgn_adv * stp_k))
+                term2 = self.beta_w * success_k * (self.gamma_s ** stp_k)
+                r_K = term1 + term2                                         # (total_env_steps,)
+
+                # Normalize r_K at env-step level for PPO stability (same spirit as DPPO).
+                r_K_norm = (r_K - r_K.mean()) / (r_K.std() + 1e-8)
+
+                # Per-denoising-position discount γ_s^(stp - s - 1).
+                # Sparse reward + no V_K baseline ⇒ GAE collapses to MC return with γ_s decay.
+                positions  = torch.arange(_D, device=self.device, dtype=torch.float)          # (_D,)
+                remaining  = (stp_k.unsqueeze(1) - positions.unsqueeze(0) - 1).clamp(min=0)   # (N, _D)
+                per_step_d = self.gamma_s ** remaining                                         # (N, _D)
+                adv_per_step_all = r_K_norm.unsqueeze(1) * per_step_d                          # (N, _D)
+
+                adaptor_losses = []
                 for update_epoch in range(self.update_epochs):
                     inds_adaptor = torch.randperm(total_env_steps, device=self.device)
                     num_adaptor_batch = max(1, total_env_steps // self.batch_size)
-                    
+
                     for batch in range(num_adaptor_batch):
                         start = batch * self.batch_size
-                        end = start + self.batch_size
-                        idx = inds_adaptor[start:end] # 這個 idx 安全地限制在 total_env_steps 內
-                        
-                        # Eq. 7: 計算 Adaptor Reward
-                        sgn_adv = torch.sign(env_advantages_k[idx])
-                        term1 = self.alpha_w * env_advantages_k[idx] * (self.gamma_s ** (sgn_adv * stp_k[idx]))
-                        term2 = self.beta_w * success_k[idx] * (self.gamma_s ** stp_k[idx])
-                        r_adaptor = term1 + term2
-                        
-                        # 取出該 Batch 的觀測值與前置去噪狀態
-                        obs_b = {"state": obs_k["state"][idx]}
-                        # chains_k 的形狀為 (total_env_steps, ft_steps+1, horizon, act_dim)
-                        # 我們直接取[:-1]作為前置狀態，免去重新 reshape chains_trajs 的消耗
-                        chains_prev_b = chains_k[idx, :-1] 
-                        
-                        # 將 obs 擴增至對齊 ft_steps，並將其全部攤平輸入 Adaptor
-                        obs_repeat = obs_b["state"].unsqueeze(1).repeat(1, _D, 1, 1).flatten(0, 1)
-                        chains_flat = chains_prev_b.flatten(0, 1)
-                        
-                        dist_new = self.adaptor({"state": obs_repeat}, chains_flat)
-                        # k_k[idx] 形狀是 (Batch, ft_steps)，攤平後求 log_prob 再還原回 (Batch, ft_steps)
-                        new_logprobs_k = dist_new.log_prob(k_k[idx].flatten()).reshape(len(idx), -1)
-                        
-                        # 計算 PPO Ratio (Eq. 8)
-                        ratio_k = torch.exp(new_logprobs_k - logprobs_k_k[idx])
-                        adv_k_broadcast = r_adaptor.unsqueeze(1).repeat(1, self.model.ft_denoising_steps)
-                        
-                        surr1 = ratio_k * adv_k_broadcast
-                        surr2 = torch.clamp(ratio_k, 1.0 - 0.2, 1.0 + 0.2) * adv_k_broadcast
-                        
-                        # 利用 Valid Mask 求出真實決策步的平均 Loss
-                        adaptor_loss = -(torch.min(surr1, surr2) * mask_k[idx]).sum() / (mask_k[idx].sum() + 1e-8)
-                        
-                        self.adaptor_optimizer.zero_grad()
-                        # 因為後面不會再用到這張計算圖了，這裡不需要 retain_graph=True
-                        adaptor_loss.backward()
-                        self.adaptor_optimizer.step()
+                        end   = start + self.batch_size
+                        idx   = inds_adaptor[start:end]
 
+                        adv_batch  = adv_per_step_all[idx]    # (B, _D)
+                        mask_batch = mask_k[idx]              # (B, _D)
+
+                        obs_b = obs_k["state"][idx]
+                        chains_prev_b = chains_k[idx, :-1]    # (B, _D, h, d)
+
+                        obs_repeat  = obs_b.unsqueeze(1).repeat(1, _D, 1, 1).flatten(0, 1)
+                        chains_flat = chains_prev_b.flatten(0, 1)
+
+                        dist_new = self.adaptor({"state": obs_repeat}, chains_flat)
+                        new_logprobs_k = dist_new.log_prob(k_k[idx].flatten()).reshape(len(idx), -1)
+
+                        ratio_k = torch.exp(new_logprobs_k - logprobs_k_k[idx])
+                        surr1 = ratio_k * adv_batch
+                        surr2 = torch.clamp(ratio_k, 1.0 - 0.2, 1.0 + 0.2) * adv_batch
+                        adaptor_loss = -(torch.min(surr1, surr2) * mask_batch).sum() / (mask_batch.sum() + 1e-8)
+
+                        self.adaptor_optimizer.zero_grad()
+                        adaptor_loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.adaptor.parameters(), 10.0)
+                        self.adaptor_optimizer.step()
                         adaptor_losses.append(adaptor_loss.item())
 
                 # Update policy and critic
-                total_denoise_steps = self.n_steps * self.n_envs * self.model.ft_denoising_steps
+                total_denoise_steps = self.n_steps * self.n_envs * _D
                 clipfracs = []
                 valid_inds_actor = torch.where(mask_k.view(-1) > 0)[0]
 
@@ -579,6 +584,12 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                     run_results[-1]["train_episode_reward"] = avg_episode_reward
                 with open(self.result_path, "wb") as f:
                     pickle.dump(run_results, f)
+            if not self._in_stage3 and 'stp_k' in locals():
+                if stp_k.mean().item() < self.cfg.d3p.zeta2:
+                    log.info(f"Entering Stage 3 at itr {self.itr}: avg stp {stp_k.mean().item():.2f} < ζ2 {self.cfg.d3p.zeta2}")
+                    self.update_epochs = self.e_slow
+                    self._in_stage3 = True
+            
             self.itr += 1
 
     def save_model(self):
