@@ -94,12 +94,13 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
 
             # Reset env before iteration starts (1) if specified, (2) at eval mode, or (3) right after eval mode
             obs_trajs = {"state": np.zeros((self.n_steps, self.n_envs, self.n_cond_step, self.obs_dim))}
-            chains_trajs = np.zeros((self.n_steps, self.n_envs, self.model.ft_denoising_steps + 1, self.horizon_steps, self.action_dim))
+            _D = self.model.ddim_steps
+            chains_trajs = np.zeros((self.n_steps, self.n_envs, _D + 1, self.horizon_steps, self.action_dim))
             
             # D3P 額外數據
-            k_trajs = np.zeros((self.n_steps, self.n_envs, self.model.ft_denoising_steps))
-            k_logprobs_trajs = np.zeros((self.n_steps, self.n_envs, self.model.ft_denoising_steps))
-            valid_mask_trajs = np.zeros((self.n_steps, self.n_envs, self.model.ft_denoising_steps))
+            k_trajs          = np.zeros((self.n_steps, self.n_envs, _D))
+            k_logprobs_trajs = np.zeros((self.n_steps, self.n_envs, _D))
+            valid_mask_trajs = np.zeros((self.n_steps, self.n_envs, _D))
             total_steps_trajs = np.zeros((self.n_steps, self.n_envs)) # 存儲 stp_t (NFE)
 
             firsts_trajs = np.zeros((self.n_steps + 1, self.n_envs))
@@ -132,7 +133,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         .to(self.device)
                     }
 
-                    indices_trajs = np.zeros((self.n_steps, self.n_envs, self.model.ft_denoising_steps), dtype=np.int64)
+                    indices_trajs = np.zeros((self.n_steps, self.n_envs, _D), dtype=np.int64)
                     samples, k_samples, k_logprobs, padded_indices, v_mask, stp_t = self.model.forward_d3p(
                         cond=cond,
                         adaptor=self.adaptor,
@@ -248,8 +249,8 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                             (values_trajs, values.reshape(-1, self.n_envs))
                         )
                     total_env_steps = self.n_steps * self.n_envs
-                    indices_k = torch.tensor(indices_trajs, device=self.device).long().view(-1, self.model.ft_denoising_steps)
-                    k_k_floor = torch.floor(torch.tensor(k_trajs, device=self.device).float()).long().clamp(min=1).view(-1, self.model.ft_denoising_steps)
+                    indices_k = torch.tensor(indices_trajs, device=self.device).long().view(-1, _D)
+                    k_k_floor = torch.floor(torch.tensor(k_trajs, device=self.device).float()).long().clamp(min=1).view(-1, _D)
                     valid_mask_flat = torch.tensor(valid_mask_trajs, device=self.device).float().view(-1)
                     chains_k = torch.tensor(chains_trajs, device=self.device).float().view(-1, self.model.ft_denoising_steps + 1, self.horizon_steps, self.action_dim)
                     obs_state_k = obs_trajs["state"].view(-1, *obs_trajs["state"].shape[2:])
@@ -262,7 +263,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         end = min(start + chunk_size, len(valid_inds))
                         batch_idx = valid_inds[start:end]
                         
-                        b_inds, d_inds = torch.unravel_index(batch_idx, (len(obs_state_k), self.model.ft_denoising_steps))
+                        b_inds, d_inds = torch.unravel_index(batch_idx, (len(obs_state_k), _D))
                         
                         obs_chunk = {"state": obs_state_k[b_inds]}
                         chains_prev_chunk = chains_k[b_inds, d_inds]
@@ -320,9 +321,9 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         )
                     returns_trajs = advantages_trajs + values_trajs
 
-                k_k = torch.tensor(k_trajs, device=self.device).float().reshape(-1, self.model.ft_denoising_steps)
-                logprobs_k_k = torch.tensor(k_logprobs_trajs, device=self.device).float().reshape(-1, self.model.ft_denoising_steps)
-                mask_k = torch.tensor(valid_mask_trajs, device=self.device).float().reshape(-1, self.model.ft_denoising_steps)
+                k_k = torch.tensor(k_trajs, device=self.device).float().reshape(-1, _D)
+                logprobs_k_k = torch.tensor(k_logprobs_trajs, device=self.device).float().reshape(-1, _D)
+                mask_k = torch.tensor(valid_mask_trajs, device=self.device).float().reshape(-1, _D)
                 stp_k = torch.tensor(total_steps_trajs, device=self.device).float().reshape(-1)
                 success_k = torch.tensor((reward_trajs > 0).astype(float), device=self.device).reshape(-1) # 簡化版成功標記
                 env_advantages_k = torch.tensor(advantages_trajs, device=self.device).float().reshape(-1)
@@ -366,7 +367,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         chains_prev_b = chains_k[idx, :-1] 
                         
                         # 將 obs 擴增至對齊 ft_steps，並將其全部攤平輸入 Adaptor
-                        obs_repeat = obs_b["state"].unsqueeze(1).repeat(1, self.model.ft_denoising_steps, 1, 1).flatten(0, 1)
+                        obs_repeat = obs_b["state"].unsqueeze(1).repeat(1, _D, 1, 1).flatten(0, 1)
                         chains_flat = chains_prev_b.flatten(0, 1)
                         
                         dist_new = self.adaptor({"state": obs_repeat}, chains_flat)
@@ -405,10 +406,7 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
                         end = start + self.batch_size
                         inds_b = inds_actor[start:end] 
                         
-                        batch_inds_b, denoising_inds_b = torch.unravel_index(
-                            inds_b,
-                            (self.n_steps * self.n_envs, self.model.ft_denoising_steps),
-                        )
+                        batch_inds_b, denoising_inds_b = torch.unravel_index(inds_b, (self.n_steps * self.n_envs, _D))
                         
                         obs_b = {"state": obs_k["state"][batch_inds_b]}
                         chains_prev_b = chains_k[batch_inds_b, denoising_inds_b]
