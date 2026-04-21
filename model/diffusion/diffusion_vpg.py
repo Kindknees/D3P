@@ -341,7 +341,7 @@ class VPGDiffusion(DiffusionModel):
         
         device = self.device
         B = cond["state"].shape[0]
-        max_ft_steps = self.ft_denoising_steps
+        max_ft_steps = self.ddim_steps
         max_ddim_steps = self.ddim_steps
         
         x = torch.randn((B, self.horizon_steps, self.action_dim), device=device)
