@@ -1,3 +1,27 @@
+# D3P reproducing
+
+## Installation
+Requires python >= 3.8 and <= 3.11
+
+1. install dependencies
+```
+cd D3P
+git switch dev
+pip install -e ".[robomimic]"
+```
+
+2. [Install MuJoCo for Gym and/or Robomimic](installation/install_mujoco.md)
+3. Set environment variables for data and logging directory (default is `data/` and `log/`), and set WandB entity (username or team name)
+```
+source script/set_path.sh
+```
+
+## Run
+```
+python script/run.py --config-name=ft_d3p_ppo_diffusion_mlp \
+    --config-dir=cfg/robomimic/finetune/lift
+```
+
 # Diffusion Policy Policy Optimization (DPPO)
 
 [[Paper](https://arxiv.org/abs/2409.00588)]&nbsp;&nbsp;[[Website](https://diffusion-ppo.github.io/)]
