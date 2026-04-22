@@ -1,3 +1,26 @@
+# D3P reproducing
+
+## Installation
+Requires python >= 3.8 and <= 3.11
+
+1. install dependencies
+```
+cd D3P
+pip install -e ".[robomimic]"
+```
+
+2. [Install MuJoCo for Gym and/or Robomimic](installation/install_mujoco.md)
+3. Set environment variables for data and logging directory (default is `data/` and `log/`), and set WandB entity (username or team name)
+```
+source script/set_path.sh
+```
+
+## Run
+```
+python script/run.py --config-name=ft_d3p_ppo_diffusion_mlp \
+    --config-dir=cfg/robomimic/finetune/lift
+```
+
 # Diffusion Policy Policy Optimization (DPPO)
 
 [[Paper](https://arxiv.org/abs/2409.00588)]&nbsp;&nbsp;[[Website](https://diffusion-ppo.github.io/)]
@@ -200,3 +223,20 @@ This repository is released under the MIT license. See [LICENSE](LICENSE).
 * [DQL, Wang et al.](https://github.com/Zhendong-Wang/Diffusion-Policies-for-Offline-RL): DQL baseline
 * [QSM, Psenka et al.](https://www.michaelpsenka.io/qsm/): QSM baseline
 * [Score SDE, Song et al.](https://github.com/yang-song/score_sde_pytorch/): diffusion exact likelihood
+
+## cfg參數解說
+- denoising_steps: 去噪的步數
+- ft_denoising_steps: 這是在這總數 denoising_steps 當中，實際有被「策略梯度（PPO）微調更新」的步數。為了訓練效率與維持模型原有的生成品質（避免災難性遺忘），DPPO 演算法通常不會更新整個去噪過程，而是只更新結尾的幾步。
+```
+舉例說明：
+若denoising_steps: 20, ft_denoising_steps: 10
+當模型要生成動作時，它總共會執行 20 步去噪運算：
+- 前面 10 步：系統會使用你凍結的預訓練權重（在 VPGDiffusion 裡的 self.actor_ft）來去除雜訊，這部分的參數不會被 PPO 更新。
+- 後面 10 步 (ft_denoising_steps: 10)：系統會切換成使用正在被 PPO 訓練的權重（self.actor）來接手剩下的去噪過程。PPO 的損失函數（Loss）與梯度更新，只會針對這最後 10 步進行計算。
+```
+
+- steps: 在RL中經過多少timestpes後要進行更新
+- cond_steps: 會串聯過去歷史多少步數餵給diffusion model來進行動作生成
+- horizon_steps: diffusion model在生成時會一次生成多少的actions
+- act_steps: 模型雖然一次規劃了 horizon_steps 這麼多步的軌跡，但在現實環境中，我們實際要照著做幾步。
+- n_venvs: 同時會有多少個環境一起搜集數據

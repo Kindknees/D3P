@@ -1,0 +1,15 @@
+mujoco==3.1.6
+dm_control==1.0.16
+robosuite==1.4.1
+robomimic
+mujoco-py<2.2,>=2.1
+Cython<3.0
+antlr4-python3-runtime==4.9.3
+setuptools
+wheel
+wandb
+hydra-core
+diffusers
+PyOpenGL
+PyOpenGL-accelerate
+pretty_errors

@@ -66,6 +66,9 @@ class PPODiffusion(VPGDiffusion):
         oldlogprobs,
         use_bc_loss=False,
         reward_horizon=4,
+        indices_b=None, # ADDED
+        k_b=None,        # ADDED
+        stp_b=None
     ):
         """
         PPO loss
@@ -88,6 +91,8 @@ class PPODiffusion(VPGDiffusion):
             chains_next,
             denoising_inds,
             get_ent=True,
+            indices_b=indices_b, # ADDED
+            k_b=k_b              # ADDED
         )
         entropy_loss = -eta.mean()
         newlogprobs = newlogprobs.clamp(min=-5, max=2)
@@ -135,12 +140,10 @@ class PPODiffusion(VPGDiffusion):
         advantages = advantages.clamp(min=advantage_min, max=advantage_max)
 
         # denoising discount
-        discount = torch.tensor(
-            [
-                self.gamma_denoising ** (self.ft_denoising_steps - i - 1)
-                for i in denoising_inds
-            ]
-        ).to(self.device)
+        if stp_b is not None:
+            discount = (self.gamma_denoising ** (stp_b - denoising_inds - 1)).to(self.device)
+        else:
+            discount = torch.tensor([self.gamma_denoising ** (self.ft_denoising_steps - i - 1) for i in denoising_inds]).to(self.device)
         advantages *= discount
 
         # get ratio
@@ -148,7 +151,11 @@ class PPODiffusion(VPGDiffusion):
         ratio = logratio.exp()
 
         # exponentially interpolate between the base and the current clipping value over denoising steps and repeat
-        t = (denoising_inds.float() / (self.ft_denoising_steps - 1)).to(self.device)
+        if stp_b is not None:
+            t = (denoising_inds.float() / (stp_b - 1).clamp(min=1)).to(self.device)
+        else:
+            t = (denoising_inds.float() / (self.ft_denoising_steps - 1)).to(self.device)
+            
         if self.ft_denoising_steps > 1:
             clip_ploss_coef = self.clip_ploss_coef_base + (
                 self.clip_ploss_coef - self.clip_ploss_coef_base

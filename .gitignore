@@ -3,7 +3,6 @@ result/
 wandb/
 .vscode/
 data/
-log/
 logs/
 checkpoints/
 .github/
@@ -120,7 +119,7 @@ celerybeat.pid
 .venv
 # env/
 venv/
-ENV/
+# ENV/
 env.bak/
 venv.bak/
 
@@ -145,3 +144,5 @@ dmypy.json
 cfg/robomimic/*.sh
 
 *.out
+
+robomimic/
