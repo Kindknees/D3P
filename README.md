@@ -6,7 +6,6 @@ Requires python >= 3.8 and <= 3.11
 1. install dependencies
 ```
 cd D3P
-git switch dev
 pip install -e ".[robomimic]"
 ```
 
