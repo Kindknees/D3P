@@ -97,14 +97,14 @@ class TrainD3PPPODiffusionAgent(TrainPPOAgent):
 
             # Reset env before iteration starts (1) if specified, (2) at eval mode, or (3) right after eval mode
             obs_trajs = {"state": np.zeros((self.n_steps, self.n_envs, self.n_cond_step, self.obs_dim))}
-            _D = self.model.ddim_steps
+            _D = self.model.ddim_steps  # denoising steps
             chains_trajs = np.zeros((self.n_steps, self.n_envs, _D + 1, self.horizon_steps, self.action_dim))
             
             # D3P 額外數據
-            k_trajs          = np.zeros((self.n_steps, self.n_envs, _D))
-            k_logprobs_trajs = np.zeros((self.n_steps, self.n_envs, _D))
-            valid_mask_trajs = np.zeros((self.n_steps, self.n_envs, _D))
-            total_steps_trajs = np.zeros((self.n_steps, self.n_envs)) # 存儲 stp_t (NFE)
+            k_trajs = np.zeros((self.n_steps, self.n_envs, _D)) # store the k predicted by the adaptor at each denoising step
+            k_logprobs_trajs = np.zeros((self.n_steps, self.n_envs, _D))    # store the logprobs of the k predictions at each denoising step (for calculating adaptor loss)
+            valid_mask_trajs = np.zeros((self.n_steps, self.n_envs, _D)) # store the valid mask for each denoising step (for calculating adaptor loss)
+            total_steps_trajs = np.zeros((self.n_steps, self.n_envs)) # store the total steps at each environment step (for calculating adaptor loss)
 
             firsts_trajs = np.zeros((self.n_steps + 1, self.n_envs))
             if self.reset_at_iteration or eval_mode or last_itr_eval:
