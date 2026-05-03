@@ -19,9 +19,9 @@ obs_dim: 19
 action_dim: 7
 denoising_steps: 20
 ft_denoising_steps: 10
-cond_steps: 1
-horizon_steps: 4
-act_steps: 4
+cond_steps: 1 # History length of observations fed to the policy.
+horizon_steps: 4  # Length of the action chunk the diffusion model predicts in one denoising rollout.
+act_steps: 4  # How many of the predicted actions are actually executed in the environment before re-querying the policy.
 
 env:
   n_envs: 50
@@ -48,9 +48,9 @@ wandb:
   run: ${now:%H-%M-%S}_${name}
 
 train:
-  n_train_itr: 100
+  n_train_itr: 100  # The total number of training iterations the run will perform before stopping
   n_critic_warmup_itr: 2
-  n_steps: 300
+  n_steps: 300  # how long the rollout is before each PPO update
   gamma: 0.999
   actor_lr: 1e-4
   actor_weight_decay: 0
@@ -64,7 +64,7 @@ train:
     first_cycle_steps: ${train.n_train_itr}
     warmup_steps: 10
     min_lr: 1e-3
-  save_model_freq: 100
+  save_model_freq: 10
   val_freq: 10
   render:
     freq: 1
