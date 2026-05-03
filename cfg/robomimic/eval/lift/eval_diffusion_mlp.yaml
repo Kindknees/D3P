@@ -19,7 +19,7 @@ action_dim: 7
 denoising_steps: 20
 cond_steps: 1
 horizon_steps: 4
-act_steps: 4
+act_steps: 1
 ft_denoising_steps: 0
 
 n_steps: 300  # each episode takes max_episode_steps / act_steps steps
