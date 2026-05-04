@@ -24,7 +24,7 @@ denoising_steps: 20
 ft_denoising_steps: 10
 cond_steps: 1
 horizon_steps: 4   # diffusion chunk length
-act_steps: 4       # MUST be 1 — the wrapper steps one action at a time so we can score TD per step
+act_steps: 1       # MUST be 1 — the wrapper steps one action at a time so we can score TD per step
 
 n_steps: 300
 render_num: 0
