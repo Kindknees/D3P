@@ -3,13 +3,12 @@ defaults:
 hydra:
   run:
     dir: ${logdir}
-_target_: agent.eval.eval_d3p_diffusion_agent.EvalD3PDiffusionAgent
+_target_: agent.eval.eval_d3p_replan_agent.EvalD3PReplanAgent
 
-name: ${env_name}_eval_d3p_diffusion_mlp_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}
+name: ${env_name}_eval_d3p_replan_mlp_ta${horizon_steps}_td${denoising_steps}_tdf${ft_denoising_steps}_tau${replan.tau}
 logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-eval/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}_${seed}
 
-# Path to the D3P-finetuned checkpoint (saved by train_d3p_ppo_diffusion_agent as state_<itr>.pt).
-# The matching adaptor checkpoint (adaptor_<itr>.pt) lives in the same checkpoint/ dir.
+# Trained D3P checkpoint pair — same as the standard D3P eval.
 base_policy_path: ${oc.env:DPPO_LOG_DIR}/robomimic-finetune/lift_ft_diffusion_mlp_ta4_td20_tdf10/episode_90/checkpoint/state_90.pt
 adaptor_path: ${oc.env:DPPO_LOG_DIR}/robomimic-finetune/lift_ft_diffusion_mlp_ta4_td20_tdf10/episode_90/checkpoint/adapter_90.pt
 
@@ -22,13 +21,23 @@ env_name: lift
 obs_dim: 19
 action_dim: 7
 denoising_steps: 20
-ft_denoising_steps: 10  # must match training cfg
+ft_denoising_steps: 10
 cond_steps: 1
-horizon_steps: 4
-act_steps: 4  # match the value used at D3P training time
+horizon_steps: 4   # diffusion chunk length
+act_steps: 4       # MUST be 1 — the wrapper steps one action at a time so we can score TD per step
 
-n_steps: 300  # max env-steps per eval episode (max_episode_steps / act_steps)
+n_steps: 300
 render_num: 0
+
+# TD-residual replan trigger.
+# Trigger fires when the (pooled-EMA-) z-scored TD residual δ = r + γ V(s') − V(s)
+# falls below −tau, indicating an unexpectedly bad transition.
+replan:
+  tau: 2.0              # z-score threshold; sweep this over {1.5, 2.0, 2.5, 3.0}
+  ema_alpha: 0.02       # EMA decay for pooled (μ_δ, σ_δ)
+  warmup_steps: 200     # number of valid δ samples before trigger is allowed
+  gamma: 0.99           # TD discount; should match training cfg
+  max_chunk_steps: ${horizon_steps}  # forced replan after this many actions even if no trigger
 
 env:
   n_envs: 50
@@ -51,7 +60,6 @@ env:
 
 model:
   _target_: model.diffusion.diffusion_ppo.PPODiffusion
-  # PPO-only knobs — unused at eval time but required by the constructor.
   gamma_denoising: 0.99
   clip_ploss_coef: 0.01
   clip_ploss_coef_base: 0.001
@@ -59,7 +67,6 @@ model:
   randn_clip_value: 3
   min_sampling_denoising_std: 0.1
   min_logprob_denoising_std: 0.1
-  # D3P forward path requires DDIM.
   use_ddim: True
   network_path: ${base_policy_path}
   actor:
@@ -84,6 +91,5 @@ model:
   ddim_steps: ${denoising_steps}
   device: ${device}
 
-# Adaptor architecture must match training; values mirror cfg/robomimic/finetune/lift/ft_d3p_ppo_diffusion_mlp.yaml.
 d3p:
   mlp_dims: [256, 512, 1024, 512, 256]

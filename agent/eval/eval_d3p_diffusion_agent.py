@@ -58,7 +58,7 @@ class EvalD3PDiffusionAgent(EvalAgent):
         prev_obs_venv = self.reset_env_all(options_venv=options_venv)
         firsts_trajs[0] = 1
         reward_trajs = np.zeros((self.n_steps, self.n_envs))
-        nfe_trajs = np.zeros((self.n_steps, self.n_envs))  # dynamic denoising-step count
+        nfe_trajs = np.zeros((self.n_steps, self.n_envs))  # dynamic denoising-step count, NFE = Number of Function Evaluations
         if self.save_full_observations:
             obs_full_trajs = np.empty((0, self.n_envs, self.obs_dim))
             obs_full_trajs = np.vstack(

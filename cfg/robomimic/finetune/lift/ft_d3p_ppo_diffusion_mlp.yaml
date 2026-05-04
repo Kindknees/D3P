@@ -21,7 +21,7 @@ denoising_steps: 20
 ft_denoising_steps: 10
 cond_steps: 1 # History length of observations fed to the policy.
 horizon_steps: 4  # Length of the action chunk the diffusion model predicts in one denoising rollout.
-act_steps: 1  # How many of the predicted actions are actually executed in the environment before re-querying the policy.
+act_steps: 4  # How many of the predicted actions are actually executed in the environment before re-querying the policy.
 
 env:
   n_envs: 50
