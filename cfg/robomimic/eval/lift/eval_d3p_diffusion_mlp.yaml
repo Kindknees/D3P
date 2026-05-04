@@ -11,7 +11,7 @@ logdir: ${oc.env:DPPO_LOG_DIR}/robomimic-eval/${name}/${now:%Y-%m-%d}_${now:%H-%
 # Path to the D3P-finetuned checkpoint (saved by train_d3p_ppo_diffusion_agent as state_<itr>.pt).
 # The matching adaptor checkpoint (adaptor_<itr>.pt) lives in the same checkpoint/ dir.
 base_policy_path: ${oc.env:DPPO_LOG_DIR}/robomimic-finetune/lift_ft_diffusion_mlp_ta4_td20_tdf10/episode_90/checkpoint/state_90.pt
-adaptor_path: ${oc.env:DPPO_LOG_DIR}/robomimic-finetune/lift_ft_diffusion_mlp_ta4_td20_tdf10/episode_90/checkpoint/adaptor_90.pt
+adaptor_path: ${oc.env:DPPO_LOG_DIR}/robomimic-finetune/lift_ft_diffusion_mlp_ta4_td20_tdf10/episode_90/checkpoint/adapter_90.pt
 
 robomimic_env_cfg_path: cfg/robomimic/env_meta/${env_name}.json
 normalization_path: ${oc.env:DPPO_DATA_DIR}/robomimic/${env_name}/normalization.npz
