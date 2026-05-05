@@ -115,7 +115,7 @@ model:
 
 d3p:
   adaptor_lr: 1e-4
-  mlp_dims: [256, 512, 1024, 512, 256]
+  mlp_dims: [128, 128]
   
   zeta1: 100.0  # Threshold for Stage 1 to Stage 2
   zeta2: 4.0    # Threshold for Stage 2 to Stage 3

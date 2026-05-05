@@ -86,4 +86,4 @@ model:
 
 # Adaptor architecture must match training; values mirror cfg/robomimic/finetune/lift/ft_d3p_ppo_diffusion_mlp.yaml.
 d3p:
-  mlp_dims: [256, 512, 1024, 512, 256]
+  mlp_dims: [128, 128]
