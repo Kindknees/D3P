@@ -143,6 +143,7 @@ def test_run_pipeline_writes_audit_report_and_summary(tmp_path):
     assert summary["all_goal_evidence_ready"] is True
     assert Path(summary["audit_json"]).exists()
     assert Path(summary["final_report_markdown"]).exists()
+    assert Path(summary["final_report_html"]).exists()
     assert Path(summary["final_env_summary_csv"]).exists()
     assert Path(summary["pipeline_summary_json"]).exists()
     with Path(summary["final_results_csv"]).open("r", encoding="utf-8") as f:
@@ -151,6 +152,8 @@ def test_run_pipeline_writes_audit_report_and_summary(tmp_path):
         summaries = list(csv.DictReader(f))
     assert rows[0]["label"] == "fixed_chunk"
     assert summaries[0]["env"] == "lift"
+    summary_markdown = Path(summary["pipeline_summary_markdown"]).read_text(encoding="utf-8")
+    assert "Final Report HTML" in summary_markdown
 
 
 def test_run_pipeline_keeps_missing_square_visible(tmp_path):

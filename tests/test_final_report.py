@@ -213,7 +213,7 @@ def test_build_report_collects_multiple_suite_paths_for_same_env(tmp_path):
     assert denoise_row["source_suite"] == str(denoise_suite)
 
 
-def test_write_report_outputs_json_csv_and_markdown(tmp_path):
+def test_write_report_outputs_json_csv_markdown_and_html(tmp_path):
     built = report.build_report(_audit(tmp_path))
     outputs = report.write_report(tmp_path / "out", built)
 
@@ -221,7 +221,20 @@ def test_write_report_outputs_json_csv_and_markdown(tmp_path):
     assert Path(outputs["csv"]).exists()
     assert Path(outputs["env_summary_csv"]).exists()
     assert Path(outputs["markdown"]).exists()
+    assert Path(outputs["html"]).exists()
     assert "adaptive" in Path(outputs["markdown"]).read_text(encoding="utf-8")
+    html = Path(outputs["html"]).read_text(encoding="utf-8")
+    assert "Adaptive Replanning Experiment Overview" in html
+    assert "Goal evidence" in html
+    assert "Environment Summary" in html
+    assert "Method Comparison" in html
+    assert "Success Delta" in html
+    assert "Internal source details" in html
+    assert "base_policy_checkpoint;normalization" in html
+    assert "fixed_chunk:seed0;denoise_only:seed0" in html
+    assert "<script" not in html.lower()
+    assert "<link" not in html.lower()
+    assert 'href="http' not in html.lower()
     with Path(outputs["csv"]).open("r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     with Path(outputs["env_summary_csv"]).open("r", encoding="utf-8") as f:
@@ -248,6 +261,47 @@ def test_write_report_outputs_json_csv_and_markdown(tmp_path):
     assert rows[1]["discarded_actions_delta_vs_fixed"] == "20.0"
     assert square["readiness_missing"] == "base_policy_checkpoint;normalization"
     assert square["missing_rows"] == "fixed_chunk:seed0;denoise_only:seed0"
+
+
+
+
+def test_write_report_html_escapes_dynamic_text(tmp_path):
+    built = report.build_report(_audit(tmp_path))
+    built["rows"][0]["label"] = "<script>alert(1)</script>"
+    outputs = report.write_report(tmp_path / "html_escape", built)
+
+    html = Path(outputs["html"]).read_text(encoding="utf-8")
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "<script>alert(1)</script>" not in html
+    assert "<script" not in html.lower()
+
+
+def test_main_writes_html_snapshot(tmp_path, monkeypatch):
+    audit = _audit(tmp_path)
+    audit_path = tmp_path / "audit.json"
+    audit_path.write_text(json.dumps(audit), encoding="utf-8")
+    snapshot = tmp_path / "stable" / "adaptive_replanning_report.html"
+    output_root = tmp_path / "reports"
+    monkeypatch.setattr(
+        report.sys,
+        "argv",
+        [
+            "build_final_report.py",
+            "--audit_json",
+            str(audit_path),
+            "--output_dir",
+            str(output_root),
+            "--html_snapshot",
+            str(snapshot),
+        ],
+    )
+
+    report.main()
+
+    generated = list(output_root.glob("*_final_report/final_report.html"))
+    assert len(generated) == 1
+    assert snapshot.exists()
+    assert snapshot.read_text(encoding="utf-8") == generated[0].read_text(encoding="utf-8")
 
 
 def test_format_mean_sem_handles_missing_values():

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adaptive Replanning Experiment Overview</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #18202a;
+      --muted: #5a6573;
+      --line: #d9dee6;
+      --green: #16794c;
+      --green-soft: #dff3e8;
+      --blue: #2f5fbb;
+      --blue-soft: #e4ecff;
+      --amber: #9a5b00;
+      --amber-soft: #fff1d6;
+      --red: #b3261e;
+      --red-soft: #fde7e4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    header { background: #16202d; color: white; padding: 28px 32px; }
+    main { max-width: 1220px; margin: 0 auto; padding: 24px 24px 40px; }
+    h1 { margin: 0 0 6px; font-size: 30px; line-height: 1.15; letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: 20px; letter-spacing: 0; }
+    h3 { margin: 0 0 10px; font-size: 16px; letter-spacing: 0; }
+    p { margin: 0 0 10px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-all; }
+    section { margin-top: 22px; }
+    .subtitle { color: #d5dce8; max-width: 900px; }
+    .gate-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .gate { display: inline-flex; gap: 8px; align-items: center; border-radius: 6px; padding: 7px 10px; background: #253246; color: white; }
+    .gate strong { text-transform: uppercase; font-size: 11px; letter-spacing: 0; }
+    .gate.ok strong { color: #8ee0b7; }
+    .gate.bad strong { color: #ffaca4; }
+    .takeaways { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .takeaway, .env-card, .table-wrap, .source-details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .takeaway { padding: 14px; }
+    .takeaway strong { display: block; margin-bottom: 4px; }
+    .env-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .env-card { padding: 16px; }
+    .metric-list { margin: 0; display: grid; gap: 9px; }
+    .metric-list div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+    .metric-list div:first-child { border-top: 0; padding-top: 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; text-align: right; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #eef1f5; color: #344052; font-size: 12px; text-transform: uppercase; letter-spacing: 0; }
+    td span { display: block; color: var(--muted); font-size: 12px; }
+    .env-row th { background: #dfe6ef; color: #16202d; font-size: 13px; }
+    .bar { height: 6px; width: 100%; background: #e7ebf0; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+    .bar i { display: block; height: 100%; border-radius: 4px; }
+    .bar.success i { background: var(--green); }
+    .bar.nfe i { background: var(--blue); }
+    .source-details { padding: 14px; }
+    .source-details summary { cursor: pointer; font-weight: 700; }
+    .source-table { margin-top: 12px; }
+    .note { color: var(--muted); }
+    @media (max-width: 860px) {
+      header { padding: 22px 18px; }
+      main { padding: 18px; }
+      .takeaways, .env-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Adaptive Replanning Experiment Overview</h1>
+    <p class="subtitle">Final Lift/Can/Square evidence summarized for quick internal review.</p>
+  </header>
+  <main>
+    <section>
+      <h2>Executive Takeaways</h2>
+      <div class="takeaways">
+        <div class="takeaway"><strong>Evidence is complete</strong><p>Lift, Can, and Square final suites are present with readiness and markdown gates passing.</p></div>
+        <div class="takeaway"><strong>Adaptive gains are directional</strong><p>Can and Square show small average raw-success gains over fixed_chunk, but the 3-seed evidence does not establish statistical significance.</p></div>
+        <div class="takeaway"><strong>Compute tradeoff is clear</strong><p>Denoise-only is the lowest-NFE option, while TD-error and PPO replanning spend more NFE and discard more buffered actions.</p></div>
+      </div>
+    </section>
+    <section>
+      <h2>Environment Summary</h2>
+      <div class="env-grid"><article class="env-card">
+<h3>Can</h3>
+<dl class="metric-list">
+<div><dt>Best Success</dt><dd>can_bc_p90_reg02 <strong>71.7%</strong></dd></div>
+<div><dt>Best Return</dt><dd>can_bc_p90_reg02 <strong>88.970</strong></dd></div>
+<div><dt>Best High-Level Return</dt><dd>can_bc_p90_reg02 <strong>163.869</strong></dd></div>
+<div><dt>Lowest NFE/action</dt><dd>denoise_only <strong>1.722</strong></dd></div>
+</dl>
+</article>
+<article class="env-card">
+<h3>Lift</h3>
+<dl class="metric-list">
+<div><dt>Best Success</dt><dd>fixed_chunk <strong>79.0%</strong></dd></div>
+<div><dt>Best Return</dt><dd>td_error_p95 <strong>46.067</strong></dd></div>
+<div><dt>Best High-Level Return</dt><dd>lift_bc_p90_reg02 <strong>60.985</strong></dd></div>
+<div><dt>Lowest NFE/action</dt><dd>denoise_only <strong>1.728</strong></dd></div>
+</dl>
+</article>
+<article class="env-card">
+<h3>Square</h3>
+<dl class="metric-list">
+<div><dt>Best Success</dt><dd>square_bc_p90_reg02 <strong>33.7%</strong></dd></div>
+<div><dt>Best Return</dt><dd>td_error_p95 <strong>54.960</strong></dd></div>
+<div><dt>Best High-Level Return</dt><dd>square_bc_p90_reg02 <strong>83.119</strong></dd></div>
+<div><dt>Lowest NFE/action</dt><dd>denoise_only <strong>1.273</strong></dd></div>
+</dl>
+</article></div>
+    </section>
+    <section>
+      <h2>Method Comparison</h2>
+      <p class="note">Success and NFE/action include visual bars. Delta columns compare each method against same-environment fixed_chunk.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Method</th><th>Success</th><th>Return</th><th>High-Level Return</th><th>NFE/action</th><th>Replan</th><th>Learned Replan</th><th>Discarded/Episode</th><th>Success Delta</th><th>NFE Ratio</th></tr></thead>
+          <tbody><tr class="env-row"><th colspan="10">Lift</th></tr>
+<tr>
+<td><strong>fixed_chunk</strong><span>fixed_chunk</span></td>
+<td>0.790 +/- 0.020<div class="bar success"><i style="width: 79.0%"></i></div></td>
+<td>36.213 +/- 1.071</td>
+<td>36.213 +/- 1.071</td>
+<td>5.000 +/- 0.000<div class="bar nfe"><i style="width: 40.5%"></i></div></td>
+<td>0.250 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>+0.000</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td><strong>lift_bc_p90_reg02</strong><span>ppo_replan_only</span></td>
+<td>0.753 +/- 0.022<div class="bar success"><i style="width: 75.3%"></i></div></td>
+<td>30.710 +/- 0.798</td>
+<td>60.985 +/- 1.441</td>
+<td>6.259 +/- 0.036<div class="bar nfe"><i style="width: 50.7%"></i></div></td>
+<td>0.313 +/- 0.002</td>
+<td>0.087 +/- 0.003</td>
+<td>73.973 +/- 2.174</td>
+<td>-0.037</td>
+<td>1.252</td>
+</tr>
+<tr>
+<td><strong>td_error_p95</strong><span>td_error_replan</span></td>
+<td>0.693 +/- 0.007<div class="bar success"><i style="width: 69.3%"></i></div></td>
+<td>46.067 +/- 0.939</td>
+<td>46.067 +/- 0.939</td>
+<td>8.331 +/- 0.133<div class="bar nfe"><i style="width: 67.5%"></i></div></td>
+<td>0.417 +/- 0.007</td>
+<td>0.233 +/- 0.009</td>
+<td>198.077 +/- 7.976</td>
+<td>-0.097</td>
+<td>1.666</td>
+</tr>
+<tr>
+<td><strong>denoise_only</strong><span>denoise_only</span></td>
+<td>0.100 +/- 0.021<div class="bar success"><i style="width: 10.0%"></i></div></td>
+<td>3.480 +/- 1.266</td>
+<td>3.480 +/- 1.266</td>
+<td>1.728 +/- 0.007<div class="bar nfe"><i style="width: 14.0%"></i></div></td>
+<td>0.250 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>-0.690</td>
+<td>0.346</td>
+</tr>
+<tr class="env-row"><th colspan="10">Can</th></tr>
+<tr>
+<td><strong>can_bc_p90_reg02</strong><span>ppo_replan_only</span></td>
+<td>0.717 +/- 0.013<div class="bar success"><i style="width: 71.7%"></i></div></td>
+<td>88.970 +/- 0.431</td>
+<td>163.869 +/- 1.116</td>
+<td>12.338 +/- 0.095<div class="bar nfe"><i style="width: 100.0%"></i></div></td>
+<td>0.617 +/- 0.005</td>
+<td>0.493 +/- 0.006</td>
+<td>437.747 +/- 5.687</td>
+<td>+0.013</td>
+<td>2.468</td>
+</tr>
+<tr>
+<td><strong>fixed_chunk</strong><span>fixed_chunk</span></td>
+<td>0.703 +/- 0.052<div class="bar success"><i style="width: 70.3%"></i></div></td>
+<td>82.053 +/- 4.452</td>
+<td>82.053 +/- 4.452</td>
+<td>5.000 +/- 0.000<div class="bar nfe"><i style="width: 40.5%"></i></div></td>
+<td>0.250 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>+0.000</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td><strong>td_error_p95</strong><span>td_error_replan</span></td>
+<td>0.713 +/- 0.024<div class="bar success"><i style="width: 71.3%"></i></div></td>
+<td>84.047 +/- 2.188</td>
+<td>84.047 +/- 2.188</td>
+<td>8.846 +/- 0.149<div class="bar nfe"><i style="width: 71.7%"></i></div></td>
+<td>0.442 +/- 0.007</td>
+<td>0.263 +/- 0.010</td>
+<td>228.903 +/- 8.899</td>
+<td>+0.010</td>
+<td>1.769</td>
+</tr>
+<tr>
+<td><strong>denoise_only</strong><span>denoise_only</span></td>
+<td>0.023 +/- 0.009<div class="bar success"><i style="width: 2.3%"></i></div></td>
+<td>1.540 +/- 0.770</td>
+<td>1.540 +/- 0.770</td>
+<td>1.722 +/- 0.030<div class="bar nfe"><i style="width: 14.0%"></i></div></td>
+<td>0.250 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>-0.680</td>
+<td>0.344</td>
+</tr>
+<tr class="env-row"><th colspan="10">Square</th></tr>
+<tr>
+<td><strong>denoise_only</strong><span>denoise_only</span></td>
+<td>0.117 +/- 0.030<div class="bar success"><i style="width: 11.7%"></i></div></td>
+<td>22.637 +/- 5.108</td>
+<td>22.637 +/- 5.108</td>
+<td>1.273 +/- 0.041<div class="bar nfe"><i style="width: 10.3%"></i></div></td>
+<td>0.250 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>-0.207</td>
+<td>0.255</td>
+</tr>
+<tr>
+<td><strong>fixed_chunk</strong><span>fixed_chunk</span></td>
+<td>0.323 +/- 0.043<div class="bar success"><i style="width: 32.3%"></i></div></td>
+<td>53.677 +/- 6.198</td>
+<td>53.677 +/- 6.198</td>
+<td>5.000 +/- 0.000<div class="bar nfe"><i style="width: 40.5%"></i></div></td>
+<td>0.250 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>0.000 +/- 0.000</td>
+<td>+0.000</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td><strong>square_bc_p90_reg02</strong><span>ppo_replan_only</span></td>
+<td>0.337 +/- 0.003<div class="bar success"><i style="width: 33.7%"></i></div></td>
+<td>52.413 +/- 0.875</td>
+<td>83.119 +/- 1.494</td>
+<td>7.382 +/- 0.033<div class="bar nfe"><i style="width: 59.8%"></i></div></td>
+<td>0.369 +/- 0.002</td>
+<td>0.160 +/- 0.003</td>
+<td>188.607 +/- 2.674</td>
+<td>+0.013</td>
+<td>1.476</td>
+</tr>
+<tr>
+<td><strong>td_error_p95</strong><span>td_error_replan</span></td>
+<td>0.337 +/- 0.035<div class="bar success"><i style="width: 33.7%"></i></div></td>
+<td>54.960 +/- 6.341</td>
+<td>54.960 +/- 6.341</td>
+<td>6.260 +/- 0.065<div class="bar nfe"><i style="width: 50.7%"></i></div></td>
+<td>0.313 +/- 0.003</td>
+<td>0.087 +/- 0.004</td>
+<td>99.190 +/- 5.156</td>
+<td>+0.013</td>
+<td>1.252</td>
+</tr></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+</details>
+    </section>
+  </main>
+</body>
+</html>

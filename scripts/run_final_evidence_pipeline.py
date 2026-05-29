@@ -291,6 +291,7 @@ def write_pipeline_markdown(path: Path, summary: dict[str, Any]) -> None:
         f"- Final Results Matrix: `{summary['final_results_csv']}`",
         f"- Final Environment Summary: `{summary['final_env_summary_csv']}`",
         f"- Final Report Markdown: `{summary['final_report_markdown']}`",
+        f"- Final Report HTML: `{summary['final_report_html']}`",
     ]
     if summary.get("final_closeout_command"):
         lines.extend([
@@ -431,6 +432,7 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "final_results_csv": report_outputs["csv"],
         "final_env_summary_csv": report_outputs["env_summary_csv"],
         "final_report_markdown": report_outputs["markdown"],
+        "final_report_html": report_outputs["html"],
         "final_closeout_command": build_final_closeout_command(args),
         "final_closeout_ready": not final_closeout_placeholders,
         "final_closeout_placeholders": final_closeout_placeholders,
