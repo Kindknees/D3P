@@ -1,0 +1,20 @@
+method: adaptive_commitment_with_repair
+Ta: 4
+commitment:
+  horizons: [1, 2, 4]
+  high_threshold: p95
+  medium_threshold: p80
+repair:
+  enabled: true
+  trigger_threshold: p95
+  noise_ratio: 0.50
+  anchor_rho: 0.50
+reset:
+  catastrophic_enabled: false
+  fallback_if_repair_rejected: true
+nfe:
+  count_repair_steps: true
+  count_reset_steps: true
+logging:
+  save_step_logs: true
+  save_event_logs: true

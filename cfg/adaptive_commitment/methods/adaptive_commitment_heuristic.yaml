@@ -1,0 +1,14 @@
+method: adaptive_commitment_heuristic
+Ta: 4
+commitment:
+  horizons: [1, 2, 4]
+  feature: td_error
+  high_threshold: p95
+  medium_threshold: p80
+reset:
+  catastrophic_enabled: false
+repair:
+  enabled: false
+logging:
+  save_step_logs: true
+  save_event_logs: true

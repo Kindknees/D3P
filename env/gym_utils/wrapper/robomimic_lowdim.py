@@ -133,6 +133,20 @@ class RobomimicLowdimWrapper(gym.Env):
 
         return obs, reward, False, info
 
+
+    def get_sim_state(self):
+        if not hasattr(self.env, "get_state"):
+            raise AttributeError("Underlying Robomimic env does not expose get_state().")
+        return self.env.get_state()
+
+    def reset_to_sim_state(self, state):
+        if not hasattr(self.env, "reset_to"):
+            raise AttributeError("Underlying Robomimic env does not expose reset_to().")
+        raw_obs = self.env.reset_to(state)
+        if raw_obs is None:
+            raw_obs = self.env.get_observation()
+        return self.get_observation(raw_obs)
+
     def render(self, mode="rgb_array"):
         h, w = self.render_hw
         return self.env.render(

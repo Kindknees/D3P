@@ -1,0 +1,7 @@
+method: fixed_chunk
+Ta: 4
+repair:
+  enabled: false
+logging:
+  save_step_logs: true
+  save_event_logs: true

@@ -1,0 +1,16 @@
+experiment_name: matrix_C_square_mode_switch
+output_root: outputs/adaptive_commitment/matrix_C
+tasks: [square]
+seeds: [0, 1, 2, 3, 4]
+episodes_per_seed: 150
+methods:
+  - td_replan_anywhere_random_reset
+  - td_repair_residual_025
+  - td_repair_residual_050
+  - td_repair_residual_075
+  - adaptive_commitment_with_repair
+square_mode_metrics: true
+logging:
+  save_video: false
+  save_step_logs: true
+  save_event_logs: true

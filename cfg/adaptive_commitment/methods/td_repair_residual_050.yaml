@@ -1,0 +1,15 @@
+method: td_repair_residual_buffer
+trigger:
+  type: td_error
+  threshold: p95
+repair:
+  enabled: true
+  noise_ratio: 0.50
+  anchor_rho: 0.50
+  accept_max_action_jump: null
+  accept_max_buffer_jump: null
+reset:
+  fallback_if_repair_fails: true
+logging:
+  save_step_logs: true
+  save_event_logs: true

@@ -216,6 +216,40 @@ class MultiStep(gym.Wrapper):
         for key, value in info.items():
             self.info[key].append(value)
 
+
+    def get_sim_state(self):
+        if not hasattr(self.env, "get_sim_state"):
+            raise AttributeError("Underlying env does not expose get_sim_state().")
+        return {
+            "env_state": self.env.get_sim_state(),
+            "obs": list(self.obs),
+            "action": list(self.action),
+            "reward": list(self.reward),
+            "done": list(self.done),
+            "info": {key: list(value) for key, value in self.info.items()},
+            "cnt": self.cnt,
+        }
+
+    def reset_to_sim_state(self, state):
+        if not hasattr(self.env, "reset_to_sim_state"):
+            raise AttributeError("Underlying env does not expose reset_to_sim_state().")
+        obs = self.env.reset_to_sim_state(state["env_state"])
+        if "obs" in state and state["obs"]:
+            self.obs = deque(state["obs"], maxlen=max(self.n_obs_steps + 1, self.n_action_steps))
+        else:
+            self.obs = deque([obs], maxlen=max(self.n_obs_steps + 1, self.n_action_steps))
+        if "action" in state and state["action"]:
+            self.action = deque(state["action"], maxlen=self.n_obs_steps)
+        elif self.prev_action:
+            self.action = deque([self._single_action_space.sample()], maxlen=self.n_obs_steps)
+        self.reward = list(state.get("reward", []))
+        self.done = list(state.get("done", []))
+        self.info = defaultdict(lambda: deque(maxlen=self.n_obs_steps + 1))
+        for key, values in state.get("info", {}).items():
+            self.info[key] = deque(values, maxlen=self.n_obs_steps + 1)
+        self.cnt = int(state.get("cnt", self.cnt))
+        return self._get_obs(self.n_obs_steps)
+
     def render(self, **kwargs):
         """Not the best design"""
         return self.env.render(**kwargs)
